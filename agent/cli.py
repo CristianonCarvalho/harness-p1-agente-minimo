@@ -9,6 +9,7 @@ from agent.client import OpenRouterClient
 from agent.config import load_config
 from agent.ledger import Ledger, load_pricing
 from agent.runs import execute_run, new_run_dir
+from agent.tasks import discover_tasks, run_task
 from agent.tools import terminal_confirm
 
 
@@ -16,6 +17,7 @@ def main(
     argv: list[str] | None = None,
     client: OpenRouterClient | None = None,
     runs_dir: Path | None = None,
+    tasks_dir: Path | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description="Minimal agent CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -28,6 +30,10 @@ def main(
     run_parser.add_argument("prompt", help="Prompt text")
     run_parser.add_argument("--model", "-m", default=None, help="Model name")
     run_parser.add_argument("--workspace", "-w", default=None, help="Workspace directory")
+
+    task_parser = subparsers.add_parser("task", help="Run a task")
+    task_parser.add_argument("task", help="Task name or prefix")
+    task_parser.add_argument("--model", "-m", default=None, help="Model name")
 
     args = parser.parse_args(argv)
 
@@ -98,6 +104,47 @@ def main(
         if res.final:
             print(res.final)
         print(f"turnos: {res.turns} · custo: US$ {res.cost_usd} · fim: {res.reason}")
+        return 0
+
+    if args.command == "task":
+        cfg = load_config()
+        if not cfg.api_key and client is None:
+            print("defina OPENROUTER_API_KEY no .env")
+            return 2
+
+        model = args.model if args.model is not None else cfg.model
+        cli = client if client is not None else OpenRouterClient(api_key=cfg.api_key)
+
+        tasks_root = tasks_dir if tasks_dir is not None else Path("tasks")
+        available_tasks = discover_tasks(tasks_root)
+
+        target = args.task
+        matched_task: Path | None = None
+        for t in available_tasks:
+            if t.name == target or t.name.startswith(target):
+                matched_task = t
+                break
+            if target.isdigit() and t.name.startswith(f"{int(target):02d}"):
+                matched_task = t
+                break
+
+        if matched_task is None:
+            print(f"tarefa '{target}' não encontrada")
+            return 1
+
+        runs_path = runs_dir if runs_dir is not None else Path("runs")
+        run_dir, res, passed = run_task(
+            task_dir=matched_task,
+            runs_root=runs_path,
+            client=cli,
+            model=model,
+            max_turns=cfg.max_turns,
+            cost_cap_usd=cfg.cost_cap_usd,
+            confirm=terminal_confirm,
+        )
+
+        status = "pass" if passed else "fail"
+        print(f"{status} · turnos: {res.turns} · custo: US$ {res.cost_usd}")
         return 0
 
     parser.print_help()
