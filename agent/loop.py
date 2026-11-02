@@ -3,6 +3,7 @@ import json
 import time
 from typing import Any
 
+from agent.client import ClientError
 from agent.ledger import Ledger
 from agent.tools import TOOL_SCHEMAS, ToolContext, ToolOutput, execute
 
@@ -30,6 +31,7 @@ def run(
     ledger: Ledger,
     model: str,
     max_turns: int = 20,
+    cost_cap_usd: float = 0.10,
 ) -> RunResult:
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -44,7 +46,12 @@ def run(
         turns += 1
 
         start_time = time.perf_counter()
-        resp = client.chat(messages, model, tools=TOOL_SCHEMAS)
+        try:
+            resp = client.chat(messages, model, tools=TOOL_SCHEMAS)
+        except ClientError:
+            reason = "error"
+            final = ""
+            break
         latency_ms = int((time.perf_counter() - start_time) * 1000)
 
         ledger.llm(turn=turns, model=model, response=resp, latency_ms=latency_ms)
@@ -52,6 +59,12 @@ def run(
         choice = resp["choices"][0]
         assistant_msg = choice["message"]
         messages.append(assistant_msg)
+
+        if ledger.total_cost >= cost_cap_usd:
+            reason = "cost_cap"
+            content = assistant_msg.get("content")
+            final = "" if content is None else str(content)
+            break
 
         tool_calls = assistant_msg.get("tool_calls")
         if not tool_calls:
@@ -69,7 +82,12 @@ def run(
             invalid_args_err: str | None = None
             if isinstance(raw_args, str):
                 try:
-                    args = json.loads(raw_args)
+                    parsed = json.loads(raw_args)
+                    if isinstance(parsed, dict):
+                        args = parsed
+                    else:
+                        args = {}
+                        invalid_args_err = f"error: argumentos inválidos: esperado objeto JSON, obteve {type(parsed).__name__}"
                 except Exception as exc:
                     args = {}
                     invalid_args_err = f"error: argumentos inválidos: {exc}"
@@ -77,6 +95,7 @@ def run(
                 args = raw_args
             else:
                 args = {}
+                invalid_args_err = f"error: argumentos inválidos: tipo inesperado {type(raw_args).__name__}"
 
             start_tool = time.perf_counter()
             if invalid_args_err is not None:

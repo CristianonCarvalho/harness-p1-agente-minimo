@@ -1,5 +1,6 @@
 import json
-from typing import Any
+import time
+from typing import Any, Callable
 import httpx
 
 
@@ -23,11 +24,17 @@ class OpenRouterClient:
         base_url: str = "https://openrouter.ai/api/v1",
         transport: httpx.BaseTransport | None = None,
         timeout_s: float = 120.0,
+        max_retries: int = 3,
+        backoff_s: float = 1.0,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.transport = transport
         self.timeout_s = timeout_s
+        self.max_retries = max_retries
+        self.backoff_s = backoff_s
+        self.sleep = sleep
         self._client = httpx.Client(
             base_url=self.base_url,
             transport=self.transport,
@@ -49,10 +56,27 @@ class OpenRouterClient:
         if tools is not None:
             payload["tools"] = tools
 
-        try:
-            resp = self._client.post("/chat/completions", json=payload)
-        except httpx.HTTPError as exc:
-            raise ClientError(f"HTTP request failed: {exc}") from exc
+        resp: httpx.Response | None = None
+        for attempt in range(max(0, self.max_retries) + 1):
+            try:
+                resp = self._client.post("/chat/completions", json=payload)
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if attempt < self.max_retries:
+                    self.sleep(self.backoff_s * (2 ** attempt))
+                    continue
+                raise ClientError(f"HTTP request failed: {exc}") from exc
+            except httpx.HTTPError as exc:
+                raise ClientError(f"HTTP request failed: {exc}") from exc
+
+            if resp.status_code == 429 or (500 <= resp.status_code < 600):
+                if attempt < self.max_retries:
+                    self.sleep(self.backoff_s * (2 ** attempt))
+                    continue
+
+            break
+
+        if resp is None:
+            raise ClientError("HTTP request failed: no response")
 
         if resp.is_error:
             try:
