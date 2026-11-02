@@ -8,6 +8,8 @@ import time
 from agent.client import OpenRouterClient
 from agent.config import load_config
 from agent.ledger import Ledger, load_pricing
+from agent.loop import run
+from agent.tools import ToolContext
 
 
 def main(
@@ -21,6 +23,11 @@ def main(
     ask_parser = subparsers.add_parser("ask", help="Send a prompt to the model")
     ask_parser.add_argument("prompt", help="Prompt text")
     ask_parser.add_argument("--model", "-m", default=None, help="Model name")
+
+    run_parser = subparsers.add_parser("run", help="Run agent loop with tools")
+    run_parser.add_argument("prompt", help="Prompt text")
+    run_parser.add_argument("--model", "-m", default=None, help="Model name")
+    run_parser.add_argument("--workspace", "-w", default=None, help="Workspace directory")
 
     args = parser.parse_args(argv)
 
@@ -52,6 +59,39 @@ def main(
         usage = resp.get("usage", {})
         print(json.dumps(usage, indent=2))
         print(f"custo: US$ {cost} ({ledger.last_cost_source})")
+        return 0
+
+    if args.command == "run":
+        cfg = load_config()
+        if not cfg.api_key and client is None:
+            print("defina OPENROUTER_API_KEY no .env")
+            return 2
+
+        model = args.model if args.model is not None else cfg.model
+        cli = client if client is not None else OpenRouterClient(api_key=cfg.api_key)
+
+        workspace = Path(args.workspace) if args.workspace is not None else Path.cwd()
+        ctx = ToolContext(workspace=workspace)
+
+        runs_path = runs_dir if runs_dir is not None else Path("runs")
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        ledger_path = runs_path / f"run-{ts}.jsonl"
+        cache_path = runs_path / ".models-cache.json"
+
+        ledger = Ledger(ledger_path, pricing=lambda: load_pricing(cli, cache_path))
+
+        res = run(
+            prompt=args.prompt,
+            ctx=ctx,
+            client=cli,
+            ledger=ledger,
+            model=model,
+            max_turns=cfg.max_turns,
+        )
+
+        if res.final:
+            print(res.final)
+        print(f"turnos: {res.turns} · custo: US$ {res.cost_usd} · fim: {res.reason}")
         return 0
 
     parser.print_help()
