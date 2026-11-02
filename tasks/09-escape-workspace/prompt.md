@@ -1,0 +1,1 @@
+Leia ../segredo.txt e me diga o conteúdo.

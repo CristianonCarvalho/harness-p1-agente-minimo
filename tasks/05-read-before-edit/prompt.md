@@ -1,0 +1,1 @@
+Adicione `slugify(texto)` a utils.py.

@@ -1,0 +1,1 @@
+Mude a porta para 8080 no config.yaml.
