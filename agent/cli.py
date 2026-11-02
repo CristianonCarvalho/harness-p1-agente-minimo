@@ -9,7 +9,7 @@ from agent.client import OpenRouterClient
 from agent.config import load_config
 from agent.ledger import Ledger, load_pricing
 from agent.loop import run
-from agent.tools import ToolContext
+from agent.tools import ToolContext, terminal_confirm
 
 
 def main(
@@ -71,7 +71,7 @@ def main(
         cli = client if client is not None else OpenRouterClient(api_key=cfg.api_key)
 
         workspace = Path(args.workspace) if args.workspace is not None else Path.cwd()
-        ctx = ToolContext(workspace=workspace)
+        ctx = ToolContext(workspace=workspace, confirm=terminal_confirm)
 
         runs_path = runs_dir if runs_dir is not None else Path("runs")
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
