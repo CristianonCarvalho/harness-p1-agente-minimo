@@ -2,9 +2,9 @@
 
 ## Project context
 
-- **Stack:** <!-- fill in the languages and tools used by this project -->
-- **Test command:** <!-- fill in the command used to run tests -->
-- **Conventions:** <!-- fill in code patterns and project practices -->
+- **Stack:** Python 3.13, uv, httpx, pytest
+- **Test command:** uv run pytest
+- **Conventions:** módulos pequenos em agent/, testes offline, notas em docs/steps/
 
 ## Task execution
 
