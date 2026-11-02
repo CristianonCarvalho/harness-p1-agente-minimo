@@ -8,6 +8,7 @@ import time
 from agent.client import OpenRouterClient
 from agent.config import load_config
 from agent.ledger import Ledger, load_pricing
+from agent.report import build_report, check_auto_approve
 from agent.runs import execute_run, new_run_dir
 from agent.tasks import discover_tasks, run_task
 from agent.tools import terminal_confirm
@@ -30,10 +31,15 @@ def main(
     run_parser.add_argument("prompt", help="Prompt text")
     run_parser.add_argument("--model", "-m", default=None, help="Model name")
     run_parser.add_argument("--workspace", "-w", default=None, help="Workspace directory")
+    run_parser.add_argument("--auto-approve", action="store_true", help="Auto approve commands")
 
     task_parser = subparsers.add_parser("task", help="Run a task")
-    task_parser.add_argument("task", help="Task name or prefix")
+    task_parser.add_argument("task", nargs="?", default=None, help="Task name or prefix")
+    task_parser.add_argument("--all", "-a", action="store_true", help="Run all tasks")
+    task_parser.add_argument("--auto-approve", action="store_true", help="Auto approve commands")
     task_parser.add_argument("--model", "-m", default=None, help="Model name")
+
+    report_parser = subparsers.add_parser("report", help="Generate task report")
 
     args = parser.parse_args(argv)
 
@@ -78,9 +84,21 @@ def main(
 
         runs_path = runs_dir if runs_dir is not None else Path("runs")
         run_dir = new_run_dir(runs_path, "run")
-        print(run_dir)
 
         workspace = Path(args.workspace) if args.workspace is not None else None
+        target_ws = workspace if workspace is not None else (run_dir / "ws")
+
+        if args.auto_approve:
+            try:
+                check_auto_approve(target_ws, runs_path)
+            except ValueError as err:
+                print(f"erro: {err}")
+                return 2
+            confirm = lambda c: True
+        else:
+            confirm = terminal_confirm
+
+        print(run_dir)
 
         res = execute_run(
             prompt=args.prompt,
@@ -89,7 +107,7 @@ def main(
             model=model,
             max_turns=cfg.max_turns,
             cost_cap_usd=cfg.cost_cap_usd,
-            confirm=terminal_confirm,
+            confirm=confirm,
             workspace=workspace,
         )
 
@@ -107,6 +125,10 @@ def main(
         return 0
 
     if args.command == "task":
+        if not args.all and not args.task:
+            task_parser.print_help()
+            return 1
+
         cfg = load_config()
         if not cfg.api_key and client is None:
             print("defina OPENROUTER_API_KEY no .env")
@@ -117,6 +139,28 @@ def main(
 
         tasks_root = tasks_dir if tasks_dir is not None else Path("tasks")
         available_tasks = discover_tasks(tasks_root)
+        runs_path = runs_dir if runs_dir is not None else Path("runs")
+
+        if args.auto_approve:
+            check_auto_approve(runs_path / "check" / "ws", runs_path)
+            confirm = lambda c: True
+        else:
+            confirm = terminal_confirm
+
+        if args.all:
+            for task_dir in available_tasks:
+                run_dir, res, passed = run_task(
+                    task_dir=task_dir,
+                    runs_root=runs_path,
+                    client=cli,
+                    model=model,
+                    max_turns=cfg.max_turns,
+                    cost_cap_usd=cfg.cost_cap_usd,
+                    confirm=confirm,
+                )
+                status = "pass" if passed else "fail"
+                print(f"{task_dir.name}: {status} · turnos: {res.turns} · custo: US$ {res.cost_usd}")
+            return 0
 
         target = args.task
         matched_task: Path | None = None
@@ -132,7 +176,6 @@ def main(
             print(f"tarefa '{target}' não encontrada")
             return 1
 
-        runs_path = runs_dir if runs_dir is not None else Path("runs")
         run_dir, res, passed = run_task(
             task_dir=matched_task,
             runs_root=runs_path,
@@ -140,11 +183,22 @@ def main(
             model=model,
             max_turns=cfg.max_turns,
             cost_cap_usd=cfg.cost_cap_usd,
-            confirm=terminal_confirm,
+            confirm=confirm,
         )
 
         status = "pass" if passed else "fail"
         print(f"{status} · turnos: {res.turns} · custo: US$ {res.cost_usd}")
+        return 0
+
+    if args.command == "report":
+        tasks_root = tasks_dir if tasks_dir is not None else Path("tasks")
+        runs_path = runs_dir if runs_dir is not None else Path("runs")
+
+        report_md = build_report(tasks_root, runs_path)
+        print(report_md, end="" if report_md.endswith("\n") else "\n")
+
+        runs_path.mkdir(parents=True, exist_ok=True)
+        (runs_path / "report.md").write_text(report_md, encoding="utf-8")
         return 0
 
     parser.print_help()
