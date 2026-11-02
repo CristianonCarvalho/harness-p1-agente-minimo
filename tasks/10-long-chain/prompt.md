@@ -1,0 +1,1 @@
+Comece em c01.txt e siga a cadeia até achar o código.

@@ -1,0 +1,1 @@
+Quantas linhas de ERROR há em app.log?
