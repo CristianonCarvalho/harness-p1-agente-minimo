@@ -1,6 +1,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+import os
 from pathlib import Path
+import subprocess
 
 
 @dataclass
@@ -20,6 +22,14 @@ class ToolContext:
 class ToolOutput:
     text: str
     approved: bool | None = None
+
+
+def terminal_confirm(cmd: str) -> bool:
+    try:
+        ans = input(f"$ {cmd}  executar? [y/N] ").strip().lower()
+        return ans in ("y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        return False
 
 
 TOOL_SCHEMAS: list[dict] = [
@@ -61,6 +71,23 @@ TOOL_SCHEMAS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Executa um comando no shell do sistema operacional dentro do workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Comando shell a ser executado.",
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+    },
 ]
 
 
@@ -95,12 +122,44 @@ def _write_file(args: dict, ctx: ToolContext) -> ToolOutput:
     return ToolOutput(f"ok: {len(data)} bytes escritos em {path}")
 
 
+def _run_command(args: dict, ctx: ToolContext) -> ToolOutput:
+    cmd = args["command"]
+    if not ctx.confirm(cmd):
+        return ToolOutput("error: usuário negou o comando", approved=False)
+
+    ws = ctx.workspace.resolve()
+    try:
+        proc = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=ws,
+            env={"PATH": os.environ.get("PATH", ""), "HOME": str(ws), "LANG": "C.UTF-8"},
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=ctx.timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return ToolOutput(f"error: timeout após {ctx.timeout_s:g}s", approved=True)
+
+    stdout = proc.stdout
+    raw_stdout = stdout.encode("utf-8")
+    if len(raw_stdout) > ctx.out_limit:
+        truncated = raw_stdout[: ctx.out_limit].decode("utf-8", errors="replace")
+        stdout = f"{truncated}\n[truncado: {len(raw_stdout)} bytes no total]"
+
+    text = f"exit: {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{proc.stderr}"
+    return ToolOutput(text, approved=True)
+
+
 def execute(name: str, args: dict, ctx: ToolContext) -> ToolOutput:
     try:
         if name == "read_file":
             return _read_file(args, ctx)
         elif name == "write_file":
             return _write_file(args, ctx)
+        elif name == "run_command":
+            return _run_command(args, ctx)
         else:
             return ToolOutput(f"error: ferramenta desconhecida: {name}")
     except ValueError as e:
