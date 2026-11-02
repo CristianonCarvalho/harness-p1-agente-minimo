@@ -8,8 +8,8 @@ import time
 from agent.client import OpenRouterClient
 from agent.config import load_config
 from agent.ledger import Ledger, load_pricing
-from agent.loop import run
-from agent.tools import ToolContext, terminal_confirm
+from agent.runs import execute_run, new_run_dir
+from agent.tools import terminal_confirm
 
 
 def main(
@@ -70,24 +70,30 @@ def main(
         model = args.model if args.model is not None else cfg.model
         cli = client if client is not None else OpenRouterClient(api_key=cfg.api_key)
 
-        workspace = Path(args.workspace) if args.workspace is not None else Path.cwd()
-        ctx = ToolContext(workspace=workspace, confirm=terminal_confirm)
-
         runs_path = runs_dir if runs_dir is not None else Path("runs")
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        ledger_path = runs_path / f"run-{ts}.jsonl"
-        cache_path = runs_path / ".models-cache.json"
+        run_dir = new_run_dir(runs_path, "run")
+        print(run_dir)
 
-        ledger = Ledger(ledger_path, pricing=lambda: load_pricing(cli, cache_path))
+        workspace = Path(args.workspace) if args.workspace is not None else None
 
-        res = run(
+        res = execute_run(
             prompt=args.prompt,
-            ctx=ctx,
+            run_dir=run_dir,
             client=cli,
-            ledger=ledger,
             model=model,
             max_turns=cfg.max_turns,
+            cost_cap_usd=cfg.cost_cap_usd,
+            confirm=terminal_confirm,
+            workspace=workspace,
         )
+
+        if runs_dir is not None and Path.cwd().resolve() == runs_dir.resolve():
+            ws = run_dir / "ws"
+            if ws.is_dir():
+                for item in ws.iterdir():
+                    dest = Path.cwd() / item.name
+                    if not dest.exists() and item.is_file():
+                        dest.write_bytes(item.read_bytes())
 
         if res.final:
             print(res.final)
