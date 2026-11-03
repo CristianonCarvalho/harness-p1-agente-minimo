@@ -227,6 +227,9 @@ def test_cli_task_all_and_auto_approve(tmp_path: Path, monkeypatch, capsys):
     assert "01-t1" in captured.out
     assert "02-t2" in captured.out
     assert "pass" in captured.out
+    for d in runs_root.iterdir():
+        if d.is_dir():
+            assert (d / "ws").resolve().is_relative_to(runs_root.resolve())
 
 
 def test_cli_run_auto_approve_outside_workspace_fails(tmp_path: Path, monkeypatch, capsys):

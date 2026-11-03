@@ -186,7 +186,10 @@ def test_cli_task_prefix(tmp_path: Path, monkeypatch, capsys):
     assert code == 0
 
     out = capsys.readouterr().out
-    assert "pass · turnos: 2 · custo: US$ 0.002" in out
+    assert "pass · turnos: 2 · custo: US$ 0.0020 · " in out
+    created = [d for d in runs_dir.iterdir() if d.is_dir()]
+    assert len(created) == 1
+    assert str(created[0]) in out
 
 
 def test_cli_task_full_name(tmp_path: Path, monkeypatch, capsys):

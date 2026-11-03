@@ -111,13 +111,6 @@ def main(
             workspace=workspace,
         )
 
-        if runs_dir is not None and Path.cwd().resolve() == runs_dir.resolve():
-            ws = run_dir / "ws"
-            if ws.is_dir():
-                for item in ws.iterdir():
-                    dest = Path.cwd() / item.name
-                    if not dest.exists() and item.is_file():
-                        dest.write_bytes(item.read_bytes())
 
         if res.final:
             print(res.final)
@@ -142,7 +135,7 @@ def main(
         runs_path = runs_dir if runs_dir is not None else Path("runs")
 
         if args.auto_approve:
-            check_auto_approve(runs_path / "check" / "ws", runs_path)
+            # no task o ws é sempre runs/<id>/ws (run_task), então o auto-approve já fica restrito a runs/
             confirm = lambda c: True
         else:
             confirm = terminal_confirm
@@ -159,7 +152,7 @@ def main(
                     confirm=confirm,
                 )
                 status = "pass" if passed else "fail"
-                print(f"{task_dir.name}: {status} · turnos: {res.turns} · custo: US$ {res.cost_usd}")
+                print(f"{task_dir.name}: {status} · turnos: {res.turns} · custo: US$ {res.cost_usd:.4f} · {run_dir}")
             return 0
 
         target = args.task
@@ -187,7 +180,7 @@ def main(
         )
 
         status = "pass" if passed else "fail"
-        print(f"{status} · turnos: {res.turns} · custo: US$ {res.cost_usd}")
+        print(f"{status} · turnos: {res.turns} · custo: US$ {res.cost_usd:.4f} · {run_dir}")
         return 0
 
     if args.command == "report":

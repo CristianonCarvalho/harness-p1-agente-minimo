@@ -6,7 +6,7 @@ from agent.cli import main
 from agent.config import Config
 from agent.ledger import Ledger
 from agent.loop import SYSTEM_PROMPT, RunResult, run
-from agent.tools import ToolContext
+from agent.tools import TOOL_SCHEMAS, ToolContext
 
 
 class FakeClient:
@@ -35,6 +35,11 @@ def call(id, name, args):
         "type": "function",
         "function": {"name": name, "arguments": json.dumps(args)},
     }
+
+
+def test_system_prompt_lists_every_tool():
+    for schema in TOOL_SCHEMAS:
+        assert schema["function"]["name"] in SYSTEM_PROMPT
 
 
 def test_tool_then_answer(tmp_path: Path):
@@ -129,10 +134,13 @@ def test_cli_run_missing_api_key_exits_2(monkeypatch, capsys):
 def test_cli_run_default_workspace(tmp_path: Path, monkeypatch, capsys):
     monkeypatch.setattr("agent.cli.load_config", lambda: Config(api_key="mock-key", model="mock-model", max_turns=10))
     monkeypatch.chdir(tmp_path)
+    runs_dir = tmp_path / "runs"
     c = FakeClient([
         msg(tool_calls=[call("c1", "write_file", {"path": "default_ws.txt", "content": "teste"})]),
-        msg("criado no cwd"),
+        msg("criado no ws"),
     ])
-    code = main(["run", "crie default_ws.txt"], client=c, runs_dir=tmp_path)
+    code = main(["run", "crie default_ws.txt"], client=c, runs_dir=runs_dir)
     assert code == 0
-    assert (tmp_path / "default_ws.txt").read_text() == "teste"
+    assert not (tmp_path / "default_ws.txt").exists()
+    created = list(runs_dir.glob("*/ws/default_ws.txt"))
+    assert len(created) == 1 and created[0].read_text() == "teste"
