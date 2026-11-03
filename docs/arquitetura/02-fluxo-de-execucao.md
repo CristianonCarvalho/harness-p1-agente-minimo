@@ -51,6 +51,81 @@ sequenceDiagram
     CLI-->>Você: pass · turnos · custo
 ```
 
+## `agent task --all` de ponta a ponta, por classe
+
+Cada participante é um módulo (função) ou uma instância de classe, com o arquivo e a linha onde está. Os dois `loop` do diagrama são os dois laços do código: o de fora percorre as tarefas e o de dentro percorre os turnos com o modelo.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Você
+    participant CLI as cli.main<br/>cli.py:17
+    participant RP as report<br/>check_auto_approve
+    participant TK as tasks<br/>discover_tasks / run_task
+    participant RN as runs<br/>new_run_dir / execute_run
+    participant LP as loop.run<br/>loop.py
+    participant LG as Ledger<br/>(uma por tarefa)
+    participant OC as OpenRouterClient<br/>(um para o lote)
+    participant TL as tools.execute<br/>+ ToolContext
+
+    Você->>CLI: uv run agent task --all --auto-approve
+    CLI->>CLI: load_config() devolve Config
+    CLI->>OC: OpenRouterClient(api_key)
+    CLI->>TK: discover_tasks(tasks/)  cli.py:141
+    TK-->>CLI: [01-hello-file, 02-rename-batch, ..., 10-long-chain]
+    CLI->>RP: check_auto_approve(runs/check/ws, runs/)
+    RP-->>CLI: ok, confirm = sempre y
+
+    loop for task_dir in available_tasks  (cli.py:151, 10 voltas)
+        CLI->>TK: run_task(task_dir, runs/, client, ...)  tasks.py:65
+        TK->>RN: new_run_dir(runs/, nome)
+        RN-->>TK: runs/AAAAMMDD-HHMMSS-NN-nome/
+        TK->>TK: prepare(): copia workspace/, roda setup.py
+        TK->>RN: execute_run(prompt.md, run_dir, client)
+        RN->>TL: ToolContext(ws, confirm)
+        RN->>LG: Ledger(run_dir/trace.jsonl, pricing)
+        RN->>LP: run(prompt, ctx, client, ledger, model)
+
+        loop while turns < max_turns  (loop.py, até 20 voltas)
+            LP->>OC: chat(messages, model, TOOL_SCHEMAS)
+            OC-->>LP: resposta JSON
+            LP->>LG: llm(turn, model, resposta, latência)
+            opt resposta com tool_calls
+                LP->>TL: execute(nome, args, ctx)
+                TL-->>LP: ToolOutput(text, approved)
+                LP->>LG: tool(turn, nome, args, approved, text, ms)
+            end
+            Note over LP: para em no_tool_calls, cost_cap,<br/>max_turns ou error
+        end
+
+        LP->>LG: end(reason, turns)
+        LP-->>RN: RunResult
+        RN->>RN: save_result(): messages.json, final.txt
+        RN-->>TK: RunResult
+        TK->>TK: run_check(): python check.py
+        TK->>TK: grava check no fim do trace.jsonl
+        TK-->>CLI: (run_dir, RunResult, passed)
+        CLI-->>Você: NN-nome: pass · turnos · custo
+    end
+
+    Você->>CLI: uv run agent report
+    CLI->>RP: build_report(tasks/, runs/)
+    RP-->>CLI: tabela Markdown
+    CLI-->>Você: tabela + runs/report.md
+```
+
+O que muda e o que se repete a cada tarefa:
+
+| Objeto | Quantos no lote | Por quê |
+|---|---|---|
+| `Config` | 1 | Lida uma vez no início |
+| `OpenRouterClient` | 1 | A mesma conexão HTTP serve todas as tarefas |
+| `ToolContext` | 10 | Cada tarefa tem o seu `ws/` |
+| `Ledger` | 10 | Cada tarefa tem o seu `trace.jsonl` e o seu teto de custo |
+| `RunResult` | 10 | Um por execução do loop |
+
+Uma falha do modelo numa tarefa não interrompe o lote: o `run_task` devolve `passed=False` e o laço segue. Já uma exceção no `setup.py` de uma tarefa interrompe o lote, porque o `prepare` usa `check=True` e ninguém captura o erro.
+
 ## O loop, passo a passo
 
 Este é o coração do projeto (`agent/loop.py`, função `run`).

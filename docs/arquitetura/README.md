@@ -5,7 +5,7 @@ Páginas complementares ao [README](../../README.md), com diagramas Mermaid de c
 | Página | Pergunta que responde | Diagramas |
 |---|---|---|
 | [1. Visão geral](01-visao-geral.md) | Quais são as peças e quem depende de quem? | contexto, dependências entre módulos, dependências externas |
-| [2. Fluxo de execução](02-fluxo-de-execucao.md) | O que acontece quando rodo `agent task 01`? | sequência, fluxograma do loop, estados de parada |
+| [2. Fluxo de execução](02-fluxo-de-execucao.md) | O que acontece quando rodo `agent task 01` ou `agent task --all`? | sequência de uma tarefa, sequência do lote por classe, fluxograma do loop, estados de parada |
 | [3. Ferramentas e guardas](03-ferramentas-e-guardas.md) | Como uma `tool_call` vira efeito no disco, e o que a impede? | despacho, guarda de caminho, `run_command` |
 | [4. Modelo de dados](04-modelo-de-dados.md) | Que estruturas existem e o que fica gravado? | classes, entidades de `runs/`, protocolo de mensagens |
 | [5. Custo e ledger](05-custo-e-ledger.md) | De onde vem cada número de custo? | decisão de custo, cache de preços |
