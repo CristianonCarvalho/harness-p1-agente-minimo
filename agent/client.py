@@ -27,6 +27,7 @@ class OpenRouterClient:
         max_retries: int = 3,
         backoff_s: float = 1.0,
         sleep: Callable[[float], None] = time.sleep,
+        max_tokens: int | None = 4096,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -35,6 +36,7 @@ class OpenRouterClient:
         self.max_retries = max_retries
         self.backoff_s = backoff_s
         self.sleep = sleep
+        self.max_tokens = max_tokens
         self._client = httpx.Client(
             base_url=self.base_url,
             transport=self.transport,
@@ -42,20 +44,7 @@ class OpenRouterClient:
             headers={"Authorization": f"Bearer {self.api_key}"},
         )
 
-    def chat(
-        self,
-        messages: list[dict],
-        model: str,
-        tools: list[dict] | None = None,
-    ) -> dict:
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "usage": {"include": True},
-        }
-        if tools is not None:
-            payload["tools"] = tools
-
+    def _post(self, payload: dict) -> httpx.Response:
         resp: httpx.Response | None = None
         for attempt in range(max(0, self.max_retries) + 1):
             try:
@@ -78,6 +67,9 @@ class OpenRouterClient:
         if resp is None:
             raise ClientError("HTTP request failed: no response")
 
+        return resp
+
+    def _parse(self, resp: httpx.Response) -> dict:
         if resp.is_error:
             try:
                 err_data = resp.json()
@@ -104,6 +96,31 @@ class OpenRouterClient:
             raise ClientError("Response missing or empty 'choices'")
 
         return data
+
+    def chat(
+        self,
+        messages: list[dict],
+        model: str,
+        tools: list[dict] | None = None,
+    ) -> dict:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "usage": {"include": True},
+        }
+        if self.max_tokens is not None:
+            payload["max_tokens"] = self.max_tokens
+        if tools is not None:
+            payload["tools"] = tools
+
+        for attempt in range(max(0, self.max_retries) + 1):
+            data = self._parse(self._post(payload))
+            if data["choices"][0].get("finish_reason") != "error":
+                return data
+            if attempt < self.max_retries:
+                self.sleep(self.backoff_s * (2 ** attempt))
+
+        raise ClientError("provedor devolveu finish_reason error")
 
     def models(self) -> list[dict]:
         try:

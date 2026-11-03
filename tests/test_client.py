@@ -31,6 +31,28 @@ def test_chat_sends_body_and_auth():
     assert r["choices"][0]["message"]["content"] == "oi"
 
 
+def test_chat_sends_max_tokens():
+    seen = {}
+
+    def h(req):
+        seen["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "oi"}, "finish_reason": "stop"}], "usage": {}})
+
+    make(h).chat([{"role": "user", "content": "x"}], model="m")
+    assert seen["body"]["max_tokens"] == 4096
+
+
+def test_chat_without_max_tokens():
+    seen = {}
+
+    def h(req):
+        seen["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "oi"}, "finish_reason": "stop"}], "usage": {}})
+
+    OpenRouterClient("k", transport=httpx.MockTransport(h), max_tokens=None).chat([{"role": "user", "content": "x"}], model="m")
+    assert "max_tokens" not in seen["body"]
+
+
 def test_error_payload_with_200_raises():
     with pytest.raises(ClientError):
         make(lambda req: httpx.Response(200, json={"error": {"code": 400, "message": "bad"}})).chat([], model="m")

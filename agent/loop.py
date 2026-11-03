@@ -33,6 +33,7 @@ def run(
     model: str,
     max_turns: int = 20,
     cost_cap_usd: float = 0.10,
+    max_tool_calls_per_turn: int = 10,
 ) -> RunResult:
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -73,6 +74,13 @@ def run(
             content = assistant_msg.get("content")
             final = "" if content is None else str(content)
             break
+
+        dropped = 0
+        if len(tool_calls) > max_tool_calls_per_turn:
+            dropped = len(tool_calls) - max_tool_calls_per_turn
+            tool_calls = tool_calls[:max_tool_calls_per_turn]
+            assistant_msg["tool_calls"] = tool_calls
+            ledger.dropped(turn=turns, count=dropped)
 
         for tc in tool_calls:
             call_id = tc.get("id", "")
@@ -120,6 +128,9 @@ def run(
                     "content": out.text,
                 }
             )
+
+        if dropped > 0:
+            messages[-1]["content"] += f"\n[harness: {dropped} chamadas descartadas; máximo de {max_tool_calls_per_turn} por resposta]"
 
         if turns >= max_turns:
             reason = "max_turns"
