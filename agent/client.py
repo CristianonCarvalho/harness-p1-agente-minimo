@@ -100,8 +100,8 @@ class OpenRouterClient:
         if msg:
             raise ClientError(msg)
 
-        if "choices" not in data:
-            raise ClientError("Response missing 'choices'")
+        if not isinstance(data.get("choices"), list) or not data["choices"]:
+            raise ClientError("Response missing or empty 'choices'")
 
         return data
 

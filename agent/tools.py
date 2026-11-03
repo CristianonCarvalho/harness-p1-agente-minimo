@@ -122,6 +122,14 @@ def _write_file(args: dict, ctx: ToolContext) -> ToolOutput:
     return ToolOutput(f"ok: {len(data)} bytes escritos em {path}")
 
 
+def _cut(text: str, limit: int) -> str:
+    raw = text.encode("utf-8")
+    if len(raw) > limit:
+        truncated = raw[:limit].decode("utf-8", errors="replace")
+        return f"{truncated}\n[truncado: {len(raw)} bytes no total]"
+    return text
+
+
 def _run_command(args: dict, ctx: ToolContext) -> ToolOutput:
     cmd = args["command"]
     if not ctx.confirm(cmd):
@@ -142,13 +150,10 @@ def _run_command(args: dict, ctx: ToolContext) -> ToolOutput:
     except subprocess.TimeoutExpired:
         return ToolOutput(f"error: timeout após {ctx.timeout_s:g}s", approved=True)
 
-    stdout = proc.stdout
-    raw_stdout = stdout.encode("utf-8")
-    if len(raw_stdout) > ctx.out_limit:
-        truncated = raw_stdout[: ctx.out_limit].decode("utf-8", errors="replace")
-        stdout = f"{truncated}\n[truncado: {len(raw_stdout)} bytes no total]"
+    stdout = _cut(proc.stdout, ctx.out_limit)
+    stderr = _cut(proc.stderr, ctx.out_limit)
 
-    text = f"exit: {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{proc.stderr}"
+    text = f"exit: {proc.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
     return ToolOutput(text, approved=True)
 
 

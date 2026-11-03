@@ -11,6 +11,7 @@ SYSTEM_PROMPT = """Você é um assistente autônomo que executa tarefas trabalha
 Você tem acesso às seguintes ferramentas:
 - read_file: lê o conteúdo de um arquivo dentro do workspace.
 - write_file: escreve conteúdo em um arquivo dentro do workspace.
+- run_command: executa um comando de shell no workspace (o usuário pode negar).
 
 Use as ferramentas necessárias para inspecionar, criar ou modificar arquivos e conclua a tarefa respondendo de forma clara e objetiva."""
 

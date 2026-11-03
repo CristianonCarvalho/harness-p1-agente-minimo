@@ -86,6 +86,14 @@ def test_stdout_truncation(tmp_path: Path) -> None:
     assert len(out.text) < 11_000
 
 
+def test_stderr_is_truncated(tmp_path):
+    ctx = ToolContext(workspace=tmp_path, confirm=lambda c: True, out_limit=100)
+    out = execute("run_command", {"command": "python3 -c \"import sys; sys.stderr.write('e' * 5000)\""}, ctx)
+    stderr_part = out.text.split("stderr:\n", 1)[1]
+    assert "[truncado: 5000 bytes no total]" in stderr_part
+    assert len(stderr_part) < 200
+
+
 def test_nonzero_exit_and_stderr(tmp_path: Path) -> None:
     out = execute(
         "run_command",

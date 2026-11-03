@@ -85,6 +85,12 @@ def test_chat_missing_choices_raises():
         make(lambda req: httpx.Response(200, json={"id": "gen-1"})).chat([], model="m")
 
 
+def test_chat_empty_choices_raises():
+    client = OpenRouterClient("k", transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"choices": []})))
+    with pytest.raises(ClientError):
+        client.chat([{"role": "user", "content": "x"}], model="m")
+
+
 def test_models_missing_data_raises():
     with pytest.raises(ClientError):
         make(lambda req: httpx.Response(200, json={"object": "list"})).models()
@@ -104,7 +110,7 @@ def test_cli_ask_without_api_key(monkeypatch, capsys):
     assert "defina OPENROUTER_API_KEY no .env" in (captured.out + captured.err)
 
 
-def test_cli_ask_success(monkeypatch, capsys):
+def test_cli_ask_success(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr("agent.cli.load_config", lambda: Config(api_key="mock-key", model="mock-model"))
 
     def h(req):
@@ -120,15 +126,16 @@ def test_cli_ask_success(monkeypatch, capsys):
         )
 
     mock_client = OpenRouterClient("mock-key", transport=httpx.MockTransport(h))
-    code = main(["ask", "olá"], client=mock_client)
+    code = main(["ask", "olá"], client=mock_client, runs_dir=tmp_path)
     assert code == 0
     captured = capsys.readouterr()
     assert "Olá, tudo bem?" in captured.out
     assert '"prompt_tokens": 5' in captured.out
     assert '"cost": 0.0001' in captured.out
+    assert len(list(tmp_path.glob("ask-*.jsonl"))) == 1
 
 
-def test_cli_ask_with_model_flag(monkeypatch, capsys):
+def test_cli_ask_with_model_flag(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr("agent.cli.load_config", lambda: Config(api_key="mock-key", model="default-model"))
 
     def h(req):
@@ -143,7 +150,8 @@ def test_cli_ask_with_model_flag(monkeypatch, capsys):
         )
 
     mock_client = OpenRouterClient("mock-key", transport=httpx.MockTransport(h))
-    code = main(["ask", "teste", "--model", "custom/model"], client=mock_client)
+    code = main(["ask", "teste", "--model", "custom/model"], client=mock_client, runs_dir=tmp_path)
     assert code == 0
     captured = capsys.readouterr()
     assert "Resposta custom" in captured.out
+    assert len(list(tmp_path.glob("ask-*.jsonl"))) == 1
