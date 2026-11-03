@@ -60,7 +60,7 @@ sequenceDiagram
     autonumber
     actor Você
     participant CLI as cli.main<br/>cli.py:17
-    participant RP as report<br/>check_auto_approve
+    participant RP as report<br/>build_report
     participant TK as tasks<br/>discover_tasks / run_task
     participant RN as runs<br/>new_run_dir / execute_run
     participant LP as loop.run<br/>loop.py
@@ -73,8 +73,7 @@ sequenceDiagram
     CLI->>OC: OpenRouterClient(api_key)
     CLI->>TK: discover_tasks(tasks/)  cli.py:141
     TK-->>CLI: [01-hello-file, 02-rename-batch, ..., 10-long-chain]
-    CLI->>RP: check_auto_approve(runs/check/ws, runs/)
-    RP-->>CLI: ok, confirm = sempre y
+    Note over CLI: --auto-approve: confirm = sempre y<br/>(o ws de cada tarefa já fica em runs/)
 
     loop for task_dir in available_tasks  (cli.py:151, 10 voltas)
         CLI->>TK: run_task(task_dir, runs/, client, ...)  tasks.py:65
@@ -91,6 +90,9 @@ sequenceDiagram
             OC-->>LP: resposta JSON
             LP->>LG: llm(turn, model, resposta, latência)
             opt resposta com tool_calls
+                opt mais de 10 tool_calls
+                    LP->>LG: dropped(turn, excedentes)
+                end
                 LP->>TL: execute(nome, args, ctx)
                 TL-->>LP: ToolOutput(text, approved)
                 LP->>LG: tool(turn, nome, args, approved, text, ms)
@@ -137,13 +139,16 @@ flowchart TD
     check_turns -->|não| stop_max(["fim: max_turns"])
     check_turns -->|sim| inc["turns += 1"]
     inc --> chatcall["client.chat(messages, model, TOOL_SCHEMAS)"]
-    chatcall -->|ClientError| stop_err(["fim: error<br/>final vazio"])
+    chatcall -->|"ClientError<br/>(HTTP ou finish_reason error<br/>após retries)"| stop_err(["fim: error<br/>final vazio"])
     chatcall --> log["ledger.llm(...)<br/>anexa a mensagem do assistente"]
     log --> cap{"custo total maior ou<br/>igual a cost_cap_usd?"}
     cap -->|sim| stop_cap(["fim: cost_cap"])
     cap -->|não| has_tc{"mensagem tem<br/>tool_calls?"}
     has_tc -->|não| stop_ok(["fim: no_tool_calls<br/>final = content"])
-    has_tc -->|sim| each["para cada tool_call, na ordem"]
+    has_tc -->|sim| limit{"mais de 10<br/>tool_calls?"}
+    limit -->|sim| drop["mantém as 10 primeiras<br/>ledger.dropped(...)"]
+    limit -->|não| each["para cada tool_call, na ordem"]
+    drop --> each
     each --> parse{"arguments é<br/>JSON de objeto?"}
     parse -->|não| bad["ToolOutput error: argumentos inválidos"]
     parse -->|sim| exec["tools.execute(name, args, ctx)"]
@@ -151,7 +156,8 @@ flowchart TD
     exec --> append["ledger.tool(...)<br/>anexa role tool + tool_call_id"]
     append --> more{"mais tool_calls?"}
     more -->|sim| each
-    more -->|não| last{"turns igual<br/>a max_turns?"}
+    more -->|não| warn["se descartou: aviso no fim<br/>da última mensagem role tool"]
+    warn --> last{"turns igual<br/>a max_turns?"}
     last -->|sim| stop_max
     last -->|não| check_turns
 
@@ -163,6 +169,7 @@ Dois detalhes que costumam surpreender:
 
 - O teto de custo é checado **depois** da chamada e **antes** de executar ferramentas. Se ele estoura, as `tool_calls` daquela resposta ficam sem resposta em `messages.json`.
 - No fim por `max_turns`, as ferramentas do último turno já rodaram, mas o modelo nunca vê o resultado delas.
+- Quando uma resposta traz mais de 10 `tool_calls`, as excedentes são removidas da própria mensagem do assistente antes de executar, para que toda chamada no histórico tenha a sua resposta `role: tool`. O modelo só fica sabendo do corte pelo aviso `[harness: N chamadas descartadas ...]`.
 
 ## Estados de uma execução
 
@@ -174,7 +181,7 @@ stateDiagram-v2
     ExecutandoFerramentas --> ChamandoModelo: resultados anexados
     ChamandoModelo --> no_tool_calls: resposta final
     ChamandoModelo --> cost_cap: custo acima do teto
-    ChamandoModelo --> error: ClientError após retries
+    ChamandoModelo --> error: ClientError após retries<br/>(HTTP ou finish_reason error)
     ExecutandoFerramentas --> max_turns: último turno
     no_tool_calls --> Verificando
     cost_cap --> Verificando
@@ -184,5 +191,3 @@ stateDiagram-v2
 ```
 
 Só no `agent task` existe o estado `Verificando`. No `agent run` a execução termina no motivo do fim.
-
-> **Divergência conhecida (passo 12):** o `SYSTEM_PROMPT` lista só `read_file` e `write_file`. O `run_command` está nos schemas, então o modelo pode usá-lo, mas o prompt não o apresenta.

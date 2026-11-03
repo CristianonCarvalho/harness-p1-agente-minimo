@@ -67,6 +67,7 @@ flowchart LR
 |---|---|
 | `llm` | `turn`, `model`, `prompt_tokens`, `completion_tokens`, `cached_tokens`, `cost_usd`, `cost_source`, `latency_ms`, `finish_reason` |
 | `tool` | `turn`, `name`, `args`, `approved`, `result_head` (500 caracteres), `result_bytes`, `ms` |
+| `dropped` | `turn`, `count`: `tool_calls` descartadas por passar de 10 numa resposta (passo 13) |
 | `end` | `reason`, `turns`, `cost_usd` (total), `check` (só no `agent task`) |
 
 O `check` é acrescentado depois: `run_task` roda o `check.py` e reescreve a última linha do trace.
@@ -82,3 +83,7 @@ turno 3: ... + assistant + tool                         → ~700
 ```
 
 O custo de uma tarefa é aproximadamente quadrático no número de turnos. O `cached_tokens` mostra quanto desse prefixo repetido o provedor cobrou com desconto.
+
+## Quando o custo foge: a tarefa 10 depois do passo 12
+
+Em `runs/20261103-151638-10-long-chain` o custo foi US$ 0.0725, 48 vezes a rodada anterior. Duas respostas trouxeram centenas de `tool_calls` repetidas (791 no turno 6, 1177 no turno 17), todas executadas e anexadas ao histórico. Daí em diante cada turno reenviava ~39 mil tokens, e o último, 100 mil. O passo 13 limita isso por três lados: `max_tokens` 4096 por resposta, no máximo 10 `tool_calls` executadas por resposta, e `finish_reason: error` tratado como falha. Detalhe turno a turno em [report-depois.md](../report-depois.md).

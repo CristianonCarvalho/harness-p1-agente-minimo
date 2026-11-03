@@ -19,6 +19,7 @@ classDiagram
         base_url: str
         max_retries: int
         backoff_s: float
+        max_tokens: int ou None = 4096
         chat(messages, model, tools) dict
         models() list
     }
@@ -45,6 +46,7 @@ classDiagram
         last_cost_source: str
         llm(turn, model, response, latency_ms) float
         tool(turn, name, args, approved, result, ms)
+        dropped(turn, count)
         end(reason, turns, check)
     }
     class RunResult {

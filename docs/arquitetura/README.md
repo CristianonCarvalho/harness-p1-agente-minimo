@@ -1,6 +1,6 @@
 # Arquitetura do agente mínimo
 
-Páginas complementares ao [README](../../README.md), com diagramas Mermaid de como o projeto funciona. Os diagramas descrevem o código da tag `step-11`; onde o código diverge da [spec](../superpowers/specs/2026-11-02-p1-agente-minimo-design.md), a página avisa.
+Páginas complementares ao [README](../../README.md), com diagramas Mermaid de como o projeto funciona. Os diagramas descrevem o código da tag `step-13`; onde o código diverge da [spec](../superpowers/specs/2026-11-02-p1-agente-minimo-design.md), a página avisa.
 
 | Página | Pergunta que responde | Diagramas |
 |---|---|---|

@@ -28,6 +28,8 @@ flowchart LR
     f --> g["main + tags step-00 a step-11"]
     g --> h["Revisão<br/>117 testes, 7 desvios"]
     h --> i["Passo 12<br/>correções"]
+    i --> j["Rodada das 10 tarefas<br/>report-depois.md"]
+    j --> k["Passo 13<br/>limites por resposta"]
 ```
 
 ## Como o Meister executou cada passo
@@ -81,6 +83,8 @@ gitGraph
     commit id: "readme" tag: "step-11"
     checkout main
     merge integracao
+    commit id: "correcoes" tag: "step-12"
+    commit id: "limites" tag: "step-13"
 ```
 
 Simplificação: na prática, cada passo veio de um worktree próprio e entrou na integração com um merge.

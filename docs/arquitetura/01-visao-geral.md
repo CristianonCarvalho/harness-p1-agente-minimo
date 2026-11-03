@@ -86,10 +86,10 @@ flowchart LR
 | Módulo | Linhas | Responsabilidade |
 |---|---|---|
 | `config.py` | 70 | Lê `.env` (parser próprio) e o ambiente; o ambiente vence |
-| `client.py` | 148 | `chat()` e `models()`; retry em 429, 5xx e falha de rede |
-| `tools.py` | 170 | 3 ferramentas, schemas e guardas |
-| `loop.py` | 136 | Chama o modelo, executa `tool_calls`, decide quando parar |
-| `ledger.py` | 141 | Grava eventos em JSONL e soma o custo |
+| `client.py` | 165 | `chat()` e `models()`; `max_tokens` 4096; retry em 429, 5xx, falha de rede e `finish_reason: error` |
+| `tools.py` | 175 | 3 ferramentas, schemas e guardas |
+| `loop.py` | 148 | Chama o modelo, executa até 10 `tool_calls` por resposta, decide quando parar |
+| `ledger.py` | 149 | Grava eventos em JSONL e soma o custo |
 | `runs.py` | 77 | Cria `runs/<id>/` e salva `messages.json` e `final.txt` |
 | `tasks.py` | 105 | Descobre, prepara e verifica tarefas |
 | `report.py` | 185 | Compara previsão e resultado |
