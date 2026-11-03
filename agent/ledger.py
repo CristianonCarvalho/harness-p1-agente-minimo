@@ -129,6 +129,14 @@ class Ledger:
         }
         self._append(record)
 
+    def dropped(self, turn: int, count: int) -> None:
+        record = {
+            "t": "dropped",
+            "turn": turn,
+            "count": count,
+        }
+        self._append(record)
+
     def end(self, reason: str, turns: int, check: str | None = None) -> None:
         record: dict[str, Any] = {
             "t": "end",

@@ -37,6 +37,35 @@ def call(id, name, args):
     }
 
 
+def finish(reason):
+    return httpx.Response(200, json={"choices": [{"message": {"content": "x"}, "finish_reason": reason}], "usage": {}})
+
+
+def test_finish_reason_error_is_retried():
+    replies = [finish("error"), finish("stop")]
+    slept = []
+    c = OpenRouterClient("k", transport=httpx.MockTransport(lambda r: replies.pop(0)), sleep=slept.append)
+    r = c.chat([{"role": "user", "content": "x"}], model="m")
+    assert r["choices"][0]["finish_reason"] == "stop"
+    assert len(slept) == 1
+
+
+def test_finish_reason_error_exhausted_ends_run(tmp_path: Path):
+    count = {"n": 0}
+
+    def h(req):
+        count["n"] += 1
+        return finish("error")
+
+    c = OpenRouterClient("k", transport=httpx.MockTransport(h), sleep=lambda s: None)
+    with pytest.raises(ClientError):
+        c.chat([{"role": "user", "content": "x"}], model="m")
+    assert count["n"] == 4
+
+    r = run("x", ToolContext(tmp_path), c, Ledger(tmp_path / "t.jsonl"), "m")
+    assert r.reason == "error"
+
+
 def test_retry_then_success():
     n = {"i": 0}
     waits = []
@@ -130,3 +159,46 @@ def test_client_error_ends_run(tmp_path: Path):
     assert (r.reason, r.final) == ("error", "")
     last = json.loads((tmp_path / "t.jsonl").read_text().splitlines()[-1])
     assert last["t"] == "end" and last["reason"] == "error"
+
+
+def test_tool_calls_over_limit_are_dropped(tmp_path: Path):
+    (tmp_path / "a.txt").write_text("oi")
+    many = [call(f"c{i}", "read_file", {"path": "a.txt"}) for i in range(25)]
+    c = FakeClient([msg(tool_calls=many), msg("fim")])
+    r = run("x", ToolContext(tmp_path), c, Ledger(tmp_path / "t.jsonl"), "m")
+
+    assistant = [m for m in r.messages if m["role"] == "assistant"][0]
+    tool_msgs = [m for m in r.messages if m["role"] == "tool"]
+    assert len(assistant["tool_calls"]) == 10
+    assert [m["tool_call_id"] for m in tool_msgs] == [tc["id"] for tc in assistant["tool_calls"]]
+    assert "15 chamadas descartadas" in tool_msgs[-1]["content"]
+
+    events = [json.loads(l) for l in (tmp_path / "t.jsonl").read_text().splitlines()]
+    assert [e for e in events if e["t"] == "dropped"] == [{"t": "dropped", "turn": 1, "count": 15}]
+    assert len([e for e in events if e["t"] == "tool"]) == 10
+
+
+def test_exactly_limit_is_not_dropped(tmp_path: Path):
+    (tmp_path / "a.txt").write_text("oi")
+    ten = [call(f"c{i}", "read_file", {"path": "a.txt"}) for i in range(10)]
+    c = FakeClient([msg(tool_calls=ten), msg("fim")])
+    r = run("x", ToolContext(tmp_path), c, Ledger(tmp_path / "t.jsonl"), "m")
+    assert len([m for m in r.messages if m["role"] == "tool"]) == 10
+    assert '"dropped"' not in (tmp_path / "t.jsonl").read_text()
+
+
+def test_report_ignores_dropped_event(tmp_path: Path):
+    from agent.report import build_report
+
+    tasks = tmp_path / "tasks" / "01-x"
+    tasks.mkdir(parents=True)
+    (tasks / "prompt.md").write_text("x")
+    run_dir = tmp_path / "runs" / "20260101-000000-01-x"
+    run_dir.mkdir(parents=True)
+    (run_dir / "trace.jsonl").write_text(
+        '{"t": "llm", "turn": 1, "prompt_tokens": 5, "completion_tokens": 2, "cost_usd": 0.001}\n'
+        '{"t": "dropped", "turn": 1, "count": 3}\n'
+        '{"t": "end", "reason": "no_tool_calls", "turns": 1, "cost_usd": 0.001, "check": "pass"}\n'
+    )
+    out = build_report(tmp_path / "tasks", tmp_path / "runs")
+    assert "| 01-x |" in out and "5/2" in out and "pass" in out
