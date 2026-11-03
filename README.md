@@ -7,6 +7,7 @@ Este repositório corresponde ao **Projeto 1 (P1)** — Fase 1 do roadmap *"Enge
 - **Especificação técnica e design do projeto:** [docs/superpowers/specs/2026-11-02-p1-agente-minimo-design.md](docs/superpowers/specs/2026-11-02-p1-agente-minimo-design.md)
 - **Roteiro de análise de falhas:** [docs/o-que-deu-errado.md](docs/o-que-deu-errado.md)
 - **Notas de estudo passo a passo:** pasta [docs/steps/](docs/steps/)
+- **Arquitetura em diagramas (Mermaid):** [docs/arquitetura/](docs/arquitetura/README.md): visão geral e dependências, fluxo de execução, ferramentas e guardas, modelo de dados, custo, tarefas e processo
 
 ### Critérios de conclusão da Fase 1
 
