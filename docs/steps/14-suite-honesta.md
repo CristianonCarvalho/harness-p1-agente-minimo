@@ -58,6 +58,10 @@ uv run pytest --collect-only -q | grep -v '^tests/' | grep '::'
   - O comando `uv run pytest --collect-only -q | grep -v '^tests/' | grep '::'` não exibe nenhuma saída, confirmando que a coleta está devidamente delimitada.
 - **Proteção contra coletas indevidas**:
   - Com `testpaths = ["tests"]` em `pyproject.toml`, o pytest deixa de coletar acidentalmente testes executados ou gerados pelo agente dentro de `runs/*/ws/` ou arquivos em `tasks/*/workspace/` (que contêm testes com bugs propositais para avaliação).
+- **Independência do diretório de execução**:
+  - Executar a suíte a partir de dentro da pasta `tests` (`cd tests && uv run pytest -q`) ou de outro diretório qualquer antes resultava em `14 failed, 114 passed`. Isso acontecia porque os testes em `tests/test_tasks.py` e `tests/test_tasks_more.py` usavam caminhos relativos na forma `Path("tasks/NN-nome")` e chamavam `main(["task", ...])` sem especificar `tasks_dir`.
+  - Caminhos relativos ao diretório atual quebram ao rodar de outro lugar porque o Python resolve caminhos relativos a partir do diretório de trabalho atual do processo (`cwd`), e não a partir da raiz do repositório ou de onde o script de teste reside. Dessa forma, ao rodar a partir de `tests/`, `Path("tasks/...")` buscava por `tests/tasks/...`, que não existe.
+  - Com a definição de `REPO_TASKS = Path(__file__).resolve().parent.parent / "tasks"` e o repasse explícito de `tasks_dir=REPO_TASKS`, os testes passam a usar caminhos absolutos e previsíveis. Após a correção, `cd tests && uv run pytest -q` apresenta consistência idêntica com `128 passed`.
 
 ## Pergunta de previsão
 

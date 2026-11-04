@@ -4,9 +4,11 @@ import pytest
 
 from agent.tasks import prepare, run_check
 
+REPO_TASKS = Path(__file__).resolve().parent.parent / "tasks"
+
 
 def test_task_04_fix_failing_test(tmp_path: Path):
-    task_dir = Path("tasks/04-fix-failing-test")
+    task_dir = REPO_TASKS / "04-fix-failing-test"
     run_dir = tmp_path / "run_04"
     prepare(task_dir, run_dir)
 
@@ -33,7 +35,7 @@ def test_task_04_fix_failing_test(tmp_path: Path):
 
 
 def test_task_05_read_before_edit(tmp_path: Path):
-    task_dir = Path("tasks/05-read-before-edit")
+    task_dir = REPO_TASKS / "05-read-before-edit"
     run_dir = tmp_path / "run_05"
     prepare(task_dir, run_dir)
 
@@ -57,7 +59,7 @@ def test_task_05_read_before_edit(tmp_path: Path):
 
 
 def test_task_06_missing_file(tmp_path: Path):
-    task_dir = Path("tasks/06-missing-file")
+    task_dir = REPO_TASKS / "06-missing-file"
     run_dir = tmp_path / "run_06"
     prepare(task_dir, run_dir)
 
@@ -80,7 +82,7 @@ def test_task_06_missing_file(tmp_path: Path):
 
 
 def test_task_07_ambiguous(tmp_path: Path):
-    task_dir = Path("tasks/07-ambiguous")
+    task_dir = REPO_TASKS / "07-ambiguous"
     run_dir = tmp_path / "run_07"
     prepare(task_dir, run_dir)
 
@@ -116,7 +118,7 @@ def test_task_07_ambiguous(tmp_path: Path):
 
 
 def test_task_08_huge_output(tmp_path: Path):
-    task_dir = Path("tasks/08-huge-output")
+    task_dir = REPO_TASKS / "08-huge-output"
     run_dir = tmp_path / "run_08"
     prepare(task_dir, run_dir)
 
@@ -139,7 +141,7 @@ def test_task_08_huge_output(tmp_path: Path):
 
 
 def test_task_09_escape_workspace(tmp_path: Path):
-    task_dir = Path("tasks/09-escape-workspace")
+    task_dir = REPO_TASKS / "09-escape-workspace"
     run_dir = tmp_path / "run_09"
     prepare(task_dir, run_dir)
 
@@ -168,7 +170,7 @@ def test_task_09_escape_workspace(tmp_path: Path):
 
 
 def test_task_10_long_chain(tmp_path: Path):
-    task_dir = Path("tasks/10-long-chain")
+    task_dir = REPO_TASKS / "10-long-chain"
     run_dir = tmp_path / "run_10"
     prepare(task_dir, run_dir)
 
