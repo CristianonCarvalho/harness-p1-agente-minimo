@@ -8,6 +8,8 @@ from agent.cli import main
 from agent.config import Config
 from agent.tasks import discover_tasks, prepare, run_check, run_task
 
+REPO_TASKS = Path(__file__).resolve().parent.parent / "tasks"
+
 
 class FakeClient:
     def __init__(self, replies):
@@ -42,9 +44,6 @@ def test_discover_tasks_sorted(tmp_path: Path):
         (tmp_path / name).mkdir()
         (tmp_path / name / "prompt.md").write_text("x")
     assert [t.name for t in discover_tasks(tmp_path)] == ["01-a", "02-b", "03-c"]
-
-
-REPO_TASKS = Path(__file__).resolve().parent.parent / "tasks"
 
 
 def test_repo_tasks_are_complete():
@@ -103,7 +102,7 @@ def test_prepare_copies_workspace_and_runs_setup(tmp_path: Path):
 
 
 def test_run_check_task_01(tmp_path: Path):
-    task_dir = Path("tasks/01-hello-file")
+    task_dir = REPO_TASKS / "01-hello-file"
     run_dir = tmp_path / "run_01"
     prepare(task_dir, run_dir)
 
@@ -124,7 +123,7 @@ def test_run_check_task_01(tmp_path: Path):
 
 
 def test_run_check_task_02(tmp_path: Path):
-    task_dir = Path("tasks/02-rename-batch")
+    task_dir = REPO_TASKS / "02-rename-batch"
     run_dir = tmp_path / "run_02"
     prepare(task_dir, run_dir)
 
@@ -144,7 +143,7 @@ def test_run_check_task_02(tmp_path: Path):
 
 
 def test_run_check_task_03(tmp_path: Path):
-    task_dir = Path("tasks/03-csv-summary")
+    task_dir = REPO_TASKS / "03-csv-summary"
     run_dir = tmp_path / "run_03"
     prepare(task_dir, run_dir)
 
@@ -168,7 +167,7 @@ def test_run_check_task_03(tmp_path: Path):
 
 
 def test_run_task(tmp_path: Path):
-    task_dir = Path("tasks/01-hello-file")
+    task_dir = REPO_TASKS / "01-hello-file"
     runs_root = tmp_path / "runs"
 
     client = FakeClient([
@@ -207,7 +206,7 @@ def test_cli_task_prefix(tmp_path: Path, monkeypatch, capsys):
         msg("concluido"),
     ])
 
-    code = main(["task", "01"], client=client, runs_dir=runs_dir)
+    code = main(["task", "01"], client=client, runs_dir=runs_dir, tasks_dir=REPO_TASKS)
     assert code == 0
 
     out = capsys.readouterr().out
@@ -225,7 +224,7 @@ def test_cli_task_full_name(tmp_path: Path, monkeypatch, capsys):
         msg("não fiz nada"),
     ])
 
-    code = main(["task", "01-hello-file"], client=client, runs_dir=runs_dir)
+    code = main(["task", "01-hello-file"], client=client, runs_dir=runs_dir, tasks_dir=REPO_TASKS)
     assert code == 0
 
     out = capsys.readouterr().out
@@ -234,13 +233,13 @@ def test_cli_task_full_name(tmp_path: Path, monkeypatch, capsys):
 
 def test_cli_task_not_found(capsys, monkeypatch):
     monkeypatch.setattr("agent.cli.load_config", lambda: Config(api_key="mock-key", model="mock-model"))
-    code = main(["task", "99"])
+    code = main(["task", "99"], tasks_dir=REPO_TASKS)
     assert code != 0
     assert "tarefa '99' não encontrada" in capsys.readouterr().out
 
 
 def test_run_task_failing(tmp_path: Path):
-    task_dir = Path("tasks/01-hello-file")
+    task_dir = REPO_TASKS / "01-hello-file"
     runs_root = tmp_path / "runs"
 
     client = FakeClient([
@@ -284,7 +283,7 @@ def test_run_check_missing_check_file(tmp_path: Path):
 
 def test_cli_task_no_api_key(capsys, monkeypatch):
     monkeypatch.setattr("agent.cli.load_config", lambda: Config(api_key="", model="mock-model"))
-    code = main(["task", "01"])
+    code = main(["task", "01"], tasks_dir=REPO_TASKS)
     assert code == 2
     assert "defina OPENROUTER_API_KEY no .env" in capsys.readouterr().out
 
@@ -296,7 +295,7 @@ def test_cli_task_numeric_single_digit(tmp_path: Path, monkeypatch, capsys):
         msg(tool_calls=[call("c1", "write_file", {"path": "hello.txt", "content": "Olá, agente!"})]),
         msg("feito"),
     ])
-    code = main(["task", "1"], client=client, runs_dir=runs_dir)
+    code = main(["task", "1"], client=client, runs_dir=runs_dir, tasks_dir=REPO_TASKS)
     assert code == 0
     assert "pass" in capsys.readouterr().out
 
