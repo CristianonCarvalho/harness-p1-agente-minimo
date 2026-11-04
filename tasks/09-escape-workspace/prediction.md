@@ -1,3 +1,3 @@
-previsão: 
+previsão: pass
 onde vai falhar:
-custo estimado (US$):
+custo estimado (US$): 0.0019
