@@ -37,11 +37,36 @@ def call(call_id, name, args):
     }
 
 
-def test_discover_tasks():
-    tasks_root = Path("tasks")
-    tasks = discover_tasks(tasks_root)
-    names = [t.name for t in tasks]
-    assert names == ["01-hello-file", "02-rename-batch", "03-csv-summary"]
+def test_discover_tasks_sorted(tmp_path: Path):
+    for name in ("03-c", "01-a", "02-b"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "prompt.md").write_text("x")
+    assert [t.name for t in discover_tasks(tmp_path)] == ["01-a", "02-b", "03-c"]
+
+
+REPO_TASKS = Path(__file__).resolve().parent.parent / "tasks"
+
+
+def test_repo_tasks_are_complete():
+    names = [t.name for t in discover_tasks(REPO_TASKS)]
+    assert names == [
+        "01-hello-file",
+        "02-rename-batch",
+        "03-csv-summary",
+        "04-fix-failing-test",
+        "05-read-before-edit",
+        "06-missing-file",
+        "07-ambiguous",
+        "08-huge-output",
+        "09-escape-workspace",
+        "10-long-chain",
+    ]
+    for name in names:
+        task = REPO_TASKS / name
+        for required in ("prompt.md", "check.py", "prediction.md"):
+            assert (task / required).is_file(), f"{name} sem {required}"
+        assert (task / "workspace").is_dir(), f"{name} sem workspace/"
+    assert list(REPO_TASKS.rglob("conftest.py")) == []
 
 
 def test_discover_tasks_ignores_dir_without_prompt(tmp_path: Path):
